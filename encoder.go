@@ -1,7 +1,7 @@
 package hdlc
 
 import (
-	"bytes"
+	"bufio"
 	"encoding/binary"
 	"io"
 
@@ -10,48 +10,75 @@ import (
 
 // An Encoder writes HDLC frames to an output stream.
 type Encoder struct {
-	w io.Writer
+	w    io.Writer
+	bufW *bufio.Writer
 }
 
 // NewEncoder returns a new encoder that writes to w.
 func NewEncoder(w io.Writer) *Encoder {
 	return &Encoder{
-		w: w,
+		w:    w,
+		bufW: bufio.NewWriter(w),
 	}
 }
 
 // WriteFrame writes the frame f on the output stream, encoding it's content.
-func (e Encoder) WriteFrame(f *Frame) (int64, error) {
-	var frameBuf bytes.Buffer
-	var dataBuf bytes.Buffer
+func (e Encoder) WriteFrame(f *Frame) (int, error) {
+	var err error
 
-	if f.HasAddressCtrlPrefix {
-		dataBuf.Write(addressCtrlSeq)
+	var n, nn int
+	if err = e.bufW.WriteByte(flagSym); err != nil {
+		return 0, err
 	}
-	dataBuf.Write(f.Payload)
-	dataBuf.Write(f.FCS)
-	data := dataBuf.Bytes()
+	n++
+	if f.HasAddressCtrlPrefix {
+		if nn, err = writeEscapedData(addressCtrlSeq, e.bufW); err != nil {
+			return n + nn, err
+		}
+		n += nn
+	}
+	if nn, err = writeEscapedData(f.Payload, e.bufW); err != nil {
+		return n + nn, err
+	}
+	n += nn
+	if nn, err = writeEscapedData(f.FCS, e.bufW); err != nil {
+		return n + nn, err
+	}
+	n += nn
+	if err = e.bufW.WriteByte(flagSym); err != nil {
+		return n + 1, err
+	}
+	n++
 
-	frameBuf.WriteByte(flagSym)
-	frameBuf.Write(escapeData(data))
-	frameBuf.WriteByte(flagSym)
+	if err = e.bufW.Flush(); err != nil {
+		return n, err
+	}
 
-	return frameBuf.WriteTo(e.w)
+	return n, nil
 }
 
-func escapeData(p []byte) []byte {
-	var out bytes.Buffer
+func writeEscapedData(p []byte, out *bufio.Writer) (int, error) {
+	var err error
+	written := 0
 
-	for _, b := range p {
+	for i, b := range p {
 		if (b) < 0x20 || ((b)&0x7f) == 0x7d || ((b)&0x7f) == 0x7e {
-			out.WriteByte(escapeSym)
-			out.WriteByte(b ^ 0x20)
+			if err = out.WriteByte(escapeSym); err != nil {
+				return written, err
+			}
+			if err = out.WriteByte(b ^ 0x20); err != nil {
+				return written, err
+			}
 		} else {
-			out.WriteByte(b)
+			if err = out.WriteByte(b); err != nil {
+				return written, err
+			}
 		}
+
+		written = i
 	}
 
-	return out.Bytes()
+	return written + 1, nil
 }
 
 // Encapsulate takes a payload p and some configuration and creates a frame that

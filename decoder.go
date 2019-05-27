@@ -8,8 +8,9 @@ import (
 
 // A Decoder reads HDLC frames from an input stream.
 type Decoder struct {
-	bufReader *bufio.Reader
-	inSync    bool
+	bufReader  *bufio.Reader
+	inSync     bool
+	decoderBuf bytes.Buffer
 }
 
 // NewDecoder returns a new decoder that reads from r.
@@ -25,6 +26,7 @@ func NewDecoder(r io.Reader) *Decoder {
 // Returns ErrInvalidFrame if the decoding fails. Returns ErrEmptyFrame when the
 // frame has no content to decode.
 func (fd *Decoder) ReadFrame() (*Frame, error) {
+	var err error
 	frame := Frame{}
 	if !fd.inSync {
 		if err := fd.resync(); err != nil {
@@ -42,7 +44,8 @@ func (fd *Decoder) ReadFrame() (*Frame, error) {
 		return nil, ErrEmptyFrame
 	}
 
-	var decodedContentBuf bytes.Buffer
+	decodedContentBuf := &fd.decoderBuf
+	decodedContentBuf.Reset()
 
 	inEscape := false
 	for _, b := range content {
