@@ -2,7 +2,9 @@ package hdlc
 
 import (
 	"bytes"
+	"math/rand"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -67,5 +69,53 @@ func TestFrame_Valid(t *testing.T) {
 				t.Errorf("Frame.Valid() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func BenchmarkEncodeDecode(b *testing.B) {
+	payloads := []struct {
+		Description string
+		PayloadSize int
+	}{
+		{
+			Description: "Small",
+			PayloadSize: 20,
+		},
+		{
+			Description: "Medium",
+			PayloadSize: 700,
+		},
+		{
+			Description: "Big",
+			PayloadSize: 1500,
+		},
+	}
+	hasAddressCtrlPrefixes := []bool{true, false}
+
+	for _, payloadDescr := range payloads {
+		payload := make([]byte, payloadDescr.PayloadSize)
+
+		for _, hasAddressCtrlPrefix := range hasAddressCtrlPrefixes {
+			var name strings.Builder
+			name.WriteString(payloadDescr.Description)
+			name.WriteString("Payload")
+
+			if hasAddressCtrlPrefix {
+				name.WriteString("WithAddressCtrlPrefix")
+			} else {
+				name.WriteString("WithoutAddressCtrlPrefix")
+			}
+
+			var buf bytes.Buffer
+			encoder := NewEncoder(&buf)
+			decoder := NewDecoder(&buf)
+			b.Run(name.String(), func(b *testing.B) {
+				for i := 0; i < b.N; i++ {
+					rand.Read(payload)
+					encoder.WriteFrame(Encapsulate(payload, true))
+					decoder.ReadFrame()
+				}
+			})
+		}
 	}
 }
