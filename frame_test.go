@@ -109,9 +109,10 @@ func BenchmarkEncodeDecode(b *testing.B) {
 			var buf bytes.Buffer
 			encoder := NewEncoder(&buf)
 			decoder := NewDecoder(&buf)
+			rand.Read(payload)
 			b.Run(name.String(), func(b *testing.B) {
 				for i := 0; i < b.N; i++ {
-					rand.Read(payload)
+					b.SetBytes(int64(payloadDescr.PayloadSize))
 					encoder.WriteFrame(Encapsulate(payload, true))
 					decoder.ReadFrame()
 				}
