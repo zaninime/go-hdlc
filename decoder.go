@@ -86,6 +86,10 @@ func (fd *Decoder) ReadFrame() (*Frame, error) {
 func (fd Decoder) readFrame() ([]byte, error) {
 	frame, err := fd.bufReader.ReadBytes(flagSym)
 
+	if err != nil {
+		return nil, err
+	}
+
 	return frame[:len(frame)-1], err
 }
 
