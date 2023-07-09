@@ -2,7 +2,7 @@ package hdlc
 
 import (
 	"bytes"
-	"math/rand"
+	"crypto/rand"
 	"reflect"
 	"strings"
 	"testing"
