@@ -1,6 +1,6 @@
 module github.com/zaninime/go-hdlc
 
-go 1.12
+go 1.20
 
 require (
 	github.com/sigurn/crc16 v0.0.0-20160107003519-da416fad5162
