@@ -11,6 +11,7 @@ type Decoder struct {
 	bufReader  *bufio.Reader
 	inSync     bool
 	decoderBuf bytes.Buffer
+	accm       asyncControlCharacterMap
 }
 
 // NewDecoder returns a new decoder that reads from r.
@@ -58,7 +59,7 @@ func (fd *Decoder) ReadFrame() (*Frame, error) {
 		} else if inEscape {
 			decodedContentBuf.WriteByte(b ^ 0x20)
 			inEscape = false
-		} else if b < 0x20 {
+		} else if fd.accm.contains(b) {
 			// skip byte introduced by DCE
 		} else {
 			decodedContentBuf.WriteByte(b)
@@ -81,6 +82,16 @@ func (fd *Decoder) ReadFrame() (*Frame, error) {
 	}
 
 	return &frame, nil
+}
+
+// SetACCM sets the decoder's Async-Control-Character-Map (ACCM). The default
+// ACCM value is 0, meaning that the decoder does not escape any control
+// characters.
+//
+// Note that this implementation does not negotiate the ACCM with the peer.
+func (fd *Decoder) SetACCM(chars ControlChar) *Decoder {
+	fd.accm = asyncControlCharacterMap(chars)
+	return fd
 }
 
 func (fd Decoder) readFrame() ([]byte, error) {

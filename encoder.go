@@ -12,6 +12,7 @@ import (
 type Encoder struct {
 	w    io.Writer
 	bufW *bufio.Writer
+	accm asyncControlCharacterMap
 }
 
 // NewEncoder returns a new encoder that writes to w.
@@ -23,7 +24,7 @@ func NewEncoder(w io.Writer) *Encoder {
 }
 
 // WriteFrame writes the frame f on the output stream, encoding it's content.
-func (e Encoder) WriteFrame(f *Frame) (int, error) {
+func (e *Encoder) WriteFrame(f *Frame) (int, error) {
 	var err error
 
 	var n, nn int
@@ -32,16 +33,16 @@ func (e Encoder) WriteFrame(f *Frame) (int, error) {
 	}
 	n++
 	if f.HasAddressCtrlPrefix {
-		if nn, err = writeEscapedData(addressCtrlSeq, e.bufW); err != nil {
+		if nn, err = e.writeEscapedData(addressCtrlSeq, e.bufW); err != nil {
 			return n + nn, err
 		}
 		n += nn
 	}
-	if nn, err = writeEscapedData(f.Payload, e.bufW); err != nil {
+	if nn, err = e.writeEscapedData(f.Payload, e.bufW); err != nil {
 		return n + nn, err
 	}
 	n += nn
-	if nn, err = writeEscapedData(f.FCS, e.bufW); err != nil {
+	if nn, err = e.writeEscapedData(f.FCS, e.bufW); err != nil {
 		return n + nn, err
 	}
 	n += nn
@@ -57,12 +58,22 @@ func (e Encoder) WriteFrame(f *Frame) (int, error) {
 	return n, nil
 }
 
-func writeEscapedData(p []byte, out *bufio.Writer) (int, error) {
+// SetACCM sets the encoder's Async-Control-Character-Map (ACCM). The default
+// ACCM value is 0, meaning that the encoder does not escape any control
+// characters.
+//
+// Note that this implementation does not negotiate the ACCM with the peer.
+func (e *Encoder) SetACCM(chars ControlChar) *Encoder {
+	e.accm = asyncControlCharacterMap(chars)
+	return e
+}
+
+func (e *Encoder) writeEscapedData(p []byte, out *bufio.Writer) (int, error) {
 	var err error
 	written := 0
 
 	for i, b := range p {
-		if (b) < 0x20 || ((b)&0x7f) == 0x7d || ((b)&0x7f) == 0x7e {
+		if e.accm.contains(b) || ((b)&0x7f) == 0x7d || ((b)&0x7f) == 0x7e {
 			if err = out.WriteByte(escapeSym); err != nil {
 				return written, err
 			}
